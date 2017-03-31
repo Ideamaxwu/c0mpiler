@@ -30,7 +30,7 @@ class Lexer(object):
 		self.text = text
 		self.pos = 0
 		self.current_char = self.text[self.pos]
-		print('EXPR: ' + text)
+		print('EXPR: \n' + text)
 	def error(self):
 		raise Exception('Invalid Character!')
 	def advance(self):
@@ -63,7 +63,7 @@ class Lexer(object):
 		return token
 	def get_next_token(self):
 		while self.current_char is not None:
-			print('CHAR: ' + self.current_char)
+			#print('CHAR: ' + self.current_char)
 			if self.current_char.isspace():
 				self.skip_whitespace()
 				continue
@@ -148,6 +148,7 @@ class Parser(object):
 	def error(self):
 		raise Exception('Invalid Syntax!')
 	def eat(self, token_type):
+		print('EAT: ' + str(self.current_token.value))
 		if self.current_token.type == token_type:
 			self.current_token = self.lexer.get_next_token()
 		else:
@@ -247,8 +248,9 @@ class Parser(object):
 		return node
 	def parse(self):
 		node = self.program()
-		if self.current_token != EOF:
+		if self.current_token.type != EOF:
 			self.error()
+			#print('EOF: ' + str(self.current_token.value))
 		return node
 
 ######
@@ -296,7 +298,7 @@ class Interpreter(NodeVisitor):
 			raise NameError(repr(var_name))
 		else:
 			return val
-	def visit_NoOP(self, node):
+	def visit_NoOp(self, node):
 		pass
 	def interpret(self):
 		tree = self.parser.parse()
@@ -311,7 +313,7 @@ def main():
 	parser = Parser(lexer)
 	interpreter = Interpreter(parser)
 	result = interpreter.interpret()
-	print('RESULT: ' + interpreter.GLOBAL_SCOPE)
+	print('RESULT: ' + str(interpreter.GLOBAL_SCOPE))
 
 if __name__ == '__main__':
 	main()
