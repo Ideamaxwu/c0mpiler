@@ -1,4 +1,7 @@
 # code from https://ruslanspivak.com/lsbasi-part1/
+
+from collections import OrderedDict
+
 ######
 # Lexer
 ######
@@ -364,10 +367,89 @@ class NodeVisitor(object):
 	def generic_visit(self, node):
 		raise Exception('No visit_{} method'.format(type(node).__name__))
 
+class Symbol(object):
+	def __init__(self, name, type = None):
+		self.name = name
+		self.type = type
+
+class BuiltinTypeSymbol(Symbol):
+	def __init__(self, name):
+		super(BuiltinTypeSymbol, self).__init__(name)
+	def __str__(self):
+		return self.name
+	__repr__ = __str__
+	
+class VarSymbol(Symbol):
+	def __init__(self, name, type):
+		super(VarSymbol, self).__init__(name, type)
+	def __str__(self):
+		return '<{name}:{type}>'.format(name = self.name, type = self.type)
+	__repr__ = __str__
+
+class SymbolTable(object):
+	def __init__(self):
+		self._symbols = OrderedDict()
+		self._init_builtins()
+	def _init_builtins(self):
+		self.define(BuiltinTypeSymbol('INTEGER'))
+		self.define(BuiltinTypeSymbol('REAL'))
+	def __str__(self):
+		s = 'Symbols: {symbols}'.format(
+			symbols = [value for value in self._symbols.values()]
+		)
+		return s
+	__repr__ = __str__
+	def define(self, symbol):
+		print('Define: %s' % symbol)
+		self._symbols[symbol.name] = symbol
+	def lookup(self, name):
+		print('Lookup: %s' % name)
+		symbol = self._symbols.get(name)
+		return symbol
+		
+class SymbolTableBuilder(NodeVisitor):
+	def __init__(self):
+		self.symtab = SymbolTable()
+	def visit_BinOp(self, node):
+		self.visit(node.left)
+		self.visit(node.right)
+	def visit_UnaryOp(self, node):
+		return self.visit(node.expr)
+	def visit_Num(self, node):
+		pass
+	def visit_Program(self, node):
+		self.visit(node.block)
+	def visit_Block(self, node):
+		for declaraton in node.declaratons:
+			self.visit(declaraton)
+		self.visit(node.compound_statement)
+	def visit_VarDecl(self, node):
+		type_name = node.type_node.value
+		type_symbol = self.symtab.lookup(type_name)
+		var_name = node.var_node.value
+		var_symble = VarSymbol(var_name, type_symbol)
+		self.symtab.define(var_symble)
+	def visit_Compound(self, node):
+		for child in node.children:
+			self.visit(child)
+	def visit_Assign(self, node):
+		var_name = node.left.value
+		var_symble = self.symtab.lookup(var_name)
+		if var_symble is None:
+			raise NameError(repr(var_name))
+		self.visit(node.right)
+	def visit_Var(self, node):
+		var_name = node.value
+		var_symble = self.symtab.lookup(var_name)
+		if var_symble is None:
+			raise NameError(repr(var_name))
+	def visit_NoOp(self, node):
+		pass
+
 class Interpreter(NodeVisitor):
-	GLOBAL_SCOPE = {}
-	def __init__(self, parser):
-		self.parser = parser
+	def __init__(self, tree):
+		self.tree = tree
+		self.GLOBAL_MEMORY = OrderedDict()
 	def visit_BinOp(self, node):
 		if node.op.type == PLUS:
 			return self.visit(node.left) + self.visit(node.right)
@@ -404,18 +486,16 @@ class Interpreter(NodeVisitor):
 			self.visit(child)
 	def visit_Assign(self, node):
 		var_name = node.left.value
-		self.GLOBAL_SCOPE[var_name] = self.visit(node.right)
+		var_value = self.visit(node.right)
+		self.GLOBAL_MEMORY[var_name] = var_value
 	def visit_Var(self, node):
 		var_name = node.value
-		val = self.GLOBAL_SCOPE.get(var_name)
-		if val is None:
-			raise NameError(repr(var_name))
-		else:
-			return val
+		var_value = self.GLOBAL_MEMORY.get(var_name)
+		return var_value
 	def visit_NoOp(self, node):
 		pass
 	def interpret(self):
-		tree = self.parser.parse()
+		tree = self.tree
 		if tree is None:
 		 return ''
 		return self.visit(tree)
@@ -425,9 +505,21 @@ def main():
 	text = open(sys.argv[1], 'r').read()
 	lexer = Lexer(text)
 	parser = Parser(lexer)
-	interpreter = Interpreter(parser)
+	tree = parser.parse()
+	
+	symtab_builder = SymbolTableBuilder()
+	symtab_builder.visit(tree)
+	print('')
+	print('Symbol Table contents:')
+	print(symtab_builder.symtab)
+	
+	interpreter = Interpreter(tree)
 	result = interpreter.interpret()
-	print('RESULT: ' + str(interpreter.GLOBAL_SCOPE))
-
+	
+	print('')
+	print('Run-time GLOBAL_MEMORY contents:')
+	for k, v in sorted(interpreter.GLOBAL_MEMORY.items()):
+		print('%s = %s' % (k, v))
+		
 if __name__ == '__main__':
 	main()
