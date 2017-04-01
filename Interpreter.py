@@ -6,9 +6,9 @@ from collections import OrderedDict
 # Lexer
 ######
 (INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, 
-ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, EOF) = (
+ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, PROCEDURE, EOF) = (
 	'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', '(', ')', 
-	'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'EOF'
+	'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'PROCEDURE', 'EOF'
 )
 
 class Token(object):
@@ -31,6 +31,7 @@ RESERVERD_KEYWORDS = {
 	'REAL': Token('REAL', 'REAL'),
 	'BEGIN': Token('BEGIN', 'BEGIN'),
 	'END': Token('END', 'END'),
+	'PROCEDURE': Token('PROCEDURE', 'PROCEDURE'),
 }
 
 class Lexer(object):
@@ -170,6 +171,11 @@ class VarDecl(AST):
 	def __init__(self, var_node, type_node):
 		self.var_node = var_node
 		self.type_node = type_node
+
+class ProcedureDecl(AST):
+	def __init__(self, proc_name, block_node):
+		self.proc_name = proc_name
+		self.block_node = block_node
 		
 class Type(AST):
 	def __init__(self, token):
@@ -223,7 +229,7 @@ class Parser(object):
 		node = Block(declaratons_nodes, compound_statement_node)
 		return node
 	def declaratons(self):
-		# declaratons : VAR (variable_declaration SEMI)+ | empty
+		# declaratons : VAR (variable_declaration SEMI)+ | (PROCEDURE ID SEMI block SEMI)* | empty
 		declaratons = []
 		if self.current_token.type == VAR:
 			self.eat(VAR)
@@ -231,6 +237,15 @@ class Parser(object):
 				var_decl = self.variable_declaration()
 				declaratons.extend(var_decl)
 				self.eat(SEMI)
+		while self.current_token.type == PROCEDURE:
+			self.eat(PROCEDURE)
+			proc_name = self.current_token.value
+			self.eat(ID)
+			self.eat(SEMI)
+			block_node = self.block()
+			proc_decl = ProcedureDecl(proc_name, block_node)
+			declaratons.append(proc_decl)
+			self.eat(SEMI)
 		return declaratons
 	def variable_declaration(self):
 		# variable_declaration : ID (COMMA ID)* COLON type_spec
@@ -357,7 +372,7 @@ class Parser(object):
 		return node
 
 ######
-# Interpreter
+# AST visitor
 ######
 class NodeVisitor(object):
 	def visit(self, node):
@@ -367,6 +382,9 @@ class NodeVisitor(object):
 	def generic_visit(self, node):
 		raise Exception('No visit_{} method'.format(type(node).__name__))
 
+######
+# SymbolTable
+######
 class Symbol(object):
 	def __init__(self, name, type = None):
 		self.name = name
@@ -445,7 +463,12 @@ class SymbolTableBuilder(NodeVisitor):
 			raise NameError(repr(var_name))
 	def visit_NoOp(self, node):
 		pass
+	def visit_ProcedureDecl(self, node):
+		pass
 
+######
+# Interpreter
+######
 class Interpreter(NodeVisitor):
 	def __init__(self, tree):
 		self.tree = tree
@@ -477,6 +500,8 @@ class Interpreter(NodeVisitor):
 		self.visit(node.compound_statement)
 	def visit_VarDecl(self, node):
 		#
+		pass
+	def visit_ProcedureDecl(self, node):
 		pass
 	def visit_Type(self, node):
 		#
